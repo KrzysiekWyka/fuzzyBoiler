@@ -6,6 +6,8 @@ import { HeatingStatus } from "./enums/HeatingStatus";
 import { Heating } from "./models/Heating";
 import * as _ from "lodash";
 
+import './style.css';
+
 const boiler = new Boiler();
 const pomp = new Pomp();
 const heating = new Heating();

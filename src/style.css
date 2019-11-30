@@ -1,0 +1,36 @@
+progress {
+    transform: rotate(270deg);
+}
+
+input[type="range"] {
+    float: right;
+}
+
+.container {
+    margin-top: 10rem;
+    display: grid;
+}
+
+label {
+    font-weight: bold;
+}
+
+.on {
+    color:  green;
+}
+
+.off {
+    color: red;
+}
+
+strong {
+    float: right;
+}
+
+.right {
+    float: right;
+}
+
+.moderate {
+    color: orange;
+}
