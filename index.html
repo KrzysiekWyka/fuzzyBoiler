@@ -5,9 +5,9 @@
 </head>
 <body>
 <div class="container">
-    <div style="grid-column: 1;grid-row: 1;" class="temperatureInside">
+    <div style="grid-column: 1;grid-row: 1;" class="waterTemperature">
         <label>Temperature inside boiler:</label>
-        <span class="right">70°C</span>
+        <span class="right"></span>
     </div>
     <div style="grid-column: 1;grid-row: 2;" class="heatingStatus">
         <label>Heating status:</label>
@@ -20,15 +20,15 @@
         <strong class="on">On</strong>
         <strong class="off">Off</strong>
     </div>
-    <div style="grid-column: 1; grid-row: 4;"  class="waterTemperature">
+    <div style="grid-column: 1; grid-row: 4;"  class="inputTemperature">
         <label>Input water temperature:</label>
         <span style="float: right"></span>
         <input type="range" min="0"  max="30" value="0"/>
     </div>
     <div style="grid-column: 1; grid-row: 5;" class="waterLevel">
         <label>Water level inside boiler:</label>
-        <span style="float: right">30%</span>
-        <input type="range" min="0" step="0.5"/>
+        <span style="float: right"></span>
+        <input type="range" min="0" step="1"/>
     </div>
     <div style="grid-column: 2; grid-row: 1;">
         <progress value="30" max="100"></progress>

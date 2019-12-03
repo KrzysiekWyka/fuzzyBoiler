@@ -1,14 +1,15 @@
+import * as _ from "lodash";
+import waterLevelTerm from "./waterLevelTerm";
 import { Boiler } from "./models/Boiler";
 import { Pomp } from "./models/Pomp";
-import { fromEvent, merge } from 'rxjs';
+import { fromEvent, interval, merge } from 'rxjs';
 import { PompStatus } from "./enums/PompStatus";
 import { HeatingStatus } from "./enums/HeatingStatus";
 import { Heating } from "./models/Heating";
-import * as _ from "lodash";
 
 import './style.css';
 
-const boiler = new Boiler();
+const boiler = new Boiler(waterLevelTerm);
 const pomp = new Pomp();
 const heating = new Heating();
 
@@ -17,20 +18,28 @@ const boilerProgress = document.querySelector('progress');
 const pompStatusComponent = document.querySelector('.pompStatus');
 const heatingStatusComponent = document.querySelector('.heatingStatus');
 const waterTemperatureComponent = document.querySelector('.waterTemperature');
+const inputTemperatureComponent = document.querySelector('.inputTemperature');
 
-const waterTemperatureInput = waterTemperatureComponent.querySelector('input');
+const inputTemperatureRange = inputTemperatureComponent.querySelector('input');
 
 const windowLoad$ = fromEvent(window, 'load');
 
 merge(windowLoad$, boiler.changeWaterLevel$).subscribe((arg: Event | number) => updateWaterLevel(arg instanceof Event? boiler.waterLevel: arg));
 merge(windowLoad$, pomp.changePompStatus$).subscribe((arg: Event | PompStatus) => updatePompStatus(arg instanceof Event? pomp.status: arg));
+merge(windowLoad$, heating.changeTemperature$).subscribe((arg: Event | number) => updateTemperatureLabel(arg instanceof Event? heating.temperature: arg));
 
-const waterTemperatureInput$ = fromEvent(waterTemperatureComponent, 'input');
+const waterTemperatureInput$ = fromEvent(inputTemperatureRange, 'input');
 
-merge(windowLoad$, waterTemperatureInput$).subscribe((event: Event) => updateTemperatureLabel(+_.get(event, 'target.value', 0)));
+merge(windowLoad$, waterTemperatureInput$).subscribe((event: Event) => updateInputTemperatureLabel(+_.get(event, 'target.value', 0)));
 
 fromEvent(waterLevelComponent, 'input').subscribe((event: Event) => updateWaterLevelLabel(+(<HTMLInputElement>event.target).value));
-// fromEvent(waterLevelComponent, 'change').subscribe((event: Event) => boiler.waterLevel = (+(<HTMLInputElement>event.target).value));
+fromEvent(waterLevelComponent, 'change').subscribe((event: Event) => boiler.waterLevel = (+(<HTMLInputElement>event.target).value));
+
+interval(1000).subscribe(() => {
+    if (pomp.status === PompStatus.On) {
+        boiler.waterLevel++;
+    }
+});
 
 updateHeatingStatus();
 
@@ -39,11 +48,11 @@ pomp.addMoreWater$.subscribe(() => {
 });
 
 function updateWaterLevelLabel(waterLevel: number) {
-    waterLevelComponent.querySelector('span').innerText = `${waterLevel <= 9? 0: ''}${waterLevel.toFixed(1)} l`;
+    waterLevelComponent.querySelector('span').innerText = `${waterLevel <= 9? 0: ''}${waterLevel} l`;
 }
 
 function updateWaterLevel(waterLevel: number) {
-    const maxWaterLevel = boiler.maxWaterLevel;
+    const maxWaterLevel = Boiler.maxWaterLevel;
 
     // Update waterLevel range input
     updateWaterLevelLabel(waterLevel);
@@ -58,10 +67,19 @@ function updateWaterLevel(waterLevel: number) {
     boilerProgress.value = waterLevel;
     boilerProgress.max = maxWaterLevel;
 
-    if (waterLevel !== maxWaterLevel) {
+    if (boiler.waterTermValue.high !== 1) {
         rangeInput.setAttribute('disabled', 'disabled');
-        waterTemperatureInput.setAttribute('disabled', 'disabled');
+        inputTemperatureRange.setAttribute('disabled', 'disabled');
+    } else {
+        rangeInput.removeAttribute('disabled');
+        inputTemperatureRange.removeAttribute('disabled');
     }
+
+    if (maxWaterLevel !== waterLevel) {
+        pomp.checkWaterLevel(boiler.waterTermValue);
+        heating.calculateTemperature(+inputTemperatureRange.value, waterLevel)
+    }
+
 }
 
 function updatePompStatus(pompStatus: PompStatus) {
@@ -80,60 +98,10 @@ function updateHeatingStatus(heatingStatus?: HeatingStatus) {
     (<HTMLElement>heatingStatusComponent.querySelector(`strong.${actualHeatingStatus}`)).style.display = 'block';
 }
 
+function updateInputTemperatureLabel(temperature: number) {
+    inputTemperatureComponent.querySelector('span').innerText = `${temperature <= 9? 0:''}${temperature}°C`;
+}
+
 function updateTemperatureLabel(temperature: number) {
-    waterTemperatureComponent.querySelector('span').innerText = `${temperature <= 9? 0:''}${temperature}°C`;
+    waterTemperatureComponent.querySelector('span').innerText = `${temperature <= 9? 0:''}${temperature.toFixed(1)}°C`;
 }
-
-const waterLevelTerm = new Map(new Array(81).fill(0).map((_, index) => [index, {low: 0, medium: 0, high: 0}]));
-
-enum BuildTermValue {
-    One,
-    Inc,
-    Dec
-}
-
-enum WaterLevelTermValue {
-    Low = 'low',
-    Medium = 'medium',
-    High = 'high'
-}
-
-// Low term
-buildTerm(0, 20, WaterLevelTermValue.Low, BuildTermValue.One);
-
-buildTerm(21, 29, WaterLevelTermValue.Low, BuildTermValue.Dec);
-
-// Medium term
-buildTerm(25, 33, WaterLevelTermValue.Medium, BuildTermValue.Inc);
-
-buildTerm(34, 50, WaterLevelTermValue.Medium, BuildTermValue.One);
-
-buildTerm(51, 59, WaterLevelTermValue.Medium, BuildTermValue.Dec);
-
-// High term
-buildTerm(55, 63, WaterLevelTermValue.High, BuildTermValue.Inc);
-
-buildTerm(64, 80, WaterLevelTermValue.High, BuildTermValue.One);
-
-function buildTerm(startIndex: number, endIndex: number, key: WaterLevelTermValue, value: BuildTermValue) {
-    let termValue = 1;
-
-    if (value === BuildTermValue.Dec) {
-        termValue = 0.9
-    } else if (value === BuildTermValue.Inc) {
-        termValue = 0.1
-    }
-
-    for (let i = startIndex; i <= endIndex; i++) {
-        const item = waterLevelTerm.get(i);
-
-        waterLevelTerm.set(i, {...item, [key]: +termValue.toFixed(1)});
-
-        if (value === BuildTermValue.Inc) {
-            termValue += 0.1
-        } else if (value === BuildTermValue.Dec) {
-            termValue -= 0.1;
-        }
-    }
-}
-console.log(waterLevelTerm);

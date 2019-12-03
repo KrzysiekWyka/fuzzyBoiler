@@ -1,5 +1,6 @@
-import { PompStatus } from "../enums/PompStatus";
-import { Subject } from 'rxjs';
+import {PompStatus} from "../enums/PompStatus";
+import {Subject} from 'rxjs';
+import {waterLevelTermItem} from "../utils/buildTerm";
 
 export class Pomp {
     // Speed in ms
@@ -18,6 +19,14 @@ export class Pomp {
 
     get status() {
         return this._status;
+    }
+
+    checkWaterLevel({ high }: waterLevelTermItem) {
+        if (high !== 1 && this.status === PompStatus.Off) {
+            this.status = PompStatus.On;
+        } else if (high === 1 && this.status === PompStatus.On) {
+            this.status = PompStatus.Off;
+        }
     }
 }
 
