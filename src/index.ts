@@ -1,107 +1,178 @@
 import * as _ from "lodash";
-import waterLevelTerm from "./waterLevelTerm";
-import { Boiler } from "./models/Boiler";
-import { Pomp } from "./models/Pomp";
-import { fromEvent, interval, merge } from 'rxjs';
-import { PompStatus } from "./enums/PompStatus";
-import { HeatingStatus } from "./enums/HeatingStatus";
-import { Heating } from "./models/Heating";
+import { fromEvent, interval, merge } from "rxjs";
+import {
+  HeatingLevel,
+  HeatingLevelTerm
+} from "./models/terms/HeatingLevel.model";
+import { PumpPower, PumpPowerTerm } from "./models/terms/PumpPower.model";
+import { WaterTemperature } from "./models/terms/WaterTemperature.model";
+import { WaterLevel } from "./models/terms/WaterLevel.model";
+import { BaseTerm } from "./models/terms/BaseTerm.model";
 
-import './style.css';
+import "./style.css";
 
-const boiler = new Boiler(waterLevelTerm);
-const pomp = new Pomp();
-const heating = new Heating();
+const waterLevelTerm = new WaterLevel();
+const waterTemperatureTerm = new WaterTemperature();
+const pumpPowerTerm = new PumpPower();
+const heatingLevelTerm = new HeatingLevel();
 
-const waterLevelComponent = document.querySelector('.waterLevel');
-const boilerProgress = document.querySelector('progress');
-const pompStatusComponent = document.querySelector('.pompStatus');
-const heatingStatusComponent = document.querySelector('.heatingStatus');
-const waterTemperatureComponent = document.querySelector('.waterTemperature');
-const inputTemperatureComponent = document.querySelector('.inputTemperature');
+const progressComponent = document.querySelector("progress");
 
-const inputTemperatureRange = inputTemperatureComponent.querySelector('input');
+// Water level HTML components
+const waterLevelComponent = document.querySelector(".waterLevel");
 
-const windowLoad$ = fromEvent(window, 'load');
+const waterLevelMaxValue = `${WaterLevel.WATER_LEVEL_TERM_SIZE - 1}`;
+progressComponent.setAttribute(
+  "max",
+  `${WaterLevel.WATER_LEVEL_TERM_SIZE - 1}`
+);
 
-merge(windowLoad$, boiler.changeWaterLevel$).subscribe((arg: Event | number) => updateWaterLevel(arg instanceof Event? boiler.waterLevel: arg));
-merge(windowLoad$, pomp.changePompStatus$).subscribe((arg: Event | PompStatus) => updatePompStatus(arg instanceof Event? pomp.status: arg));
-merge(windowLoad$, heating.changeTemperature$).subscribe((arg: Event | number) => updateTemperatureLabel(arg instanceof Event? heating.temperature: arg));
+waterLevelComponent.querySelector("input").max = waterLevelMaxValue;
 
-const waterTemperatureInput$ = fromEvent(inputTemperatureRange, 'input');
+waterLevelComponent.querySelector("input").addEventListener("input", e => {
+  const newValue = (<HTMLInputElement>e.target).value;
 
-merge(windowLoad$, waterTemperatureInput$).subscribe((event: Event) => updateInputTemperatureLabel(+_.get(event, 'target.value', 0)));
-
-fromEvent(waterLevelComponent, 'input').subscribe((event: Event) => updateWaterLevelLabel(+(<HTMLInputElement>event.target).value));
-fromEvent(waterLevelComponent, 'change').subscribe((event: Event) => boiler.waterLevel = (+(<HTMLInputElement>event.target).value));
-
-interval(1000).subscribe(() => {
-    if (pomp.status === PompStatus.On) {
-        boiler.waterLevel++;
-    }
+  waterLevelComponent.querySelector("span").innerHTML = `${newValue}l`;
 });
 
-updateHeatingStatus();
-
-pomp.addMoreWater$.subscribe(() => {
-    console.log('Add more water event trigger.');
+waterLevelComponent.querySelector("input").addEventListener("change", e => {
+  timerTick(+(<HTMLInputElement>e.target).value);
 });
 
-function updateWaterLevelLabel(waterLevel: number) {
-    waterLevelComponent.querySelector('span').innerText = `${waterLevel <= 9? 0: ''}${waterLevel} l`;
-}
+// Input water HTML components
+const inputTemperatureComponent = document.querySelector(".inputTemperature");
+const inputTemperatureInputComponent = inputTemperatureComponent.querySelector(
+  "input"
+);
 
-function updateWaterLevel(waterLevel: number) {
-    const maxWaterLevel = Boiler.maxWaterLevel;
+const inputTemperatureMaxValue = `${WaterTemperature.WATER_TEMPERATURE_TERM_SIZE -
+  1}`;
 
-    // Update waterLevel range input
-    updateWaterLevelLabel(waterLevel);
+inputTemperatureInputComponent.setAttribute("max", inputTemperatureMaxValue);
+inputTemperatureInputComponent.setAttribute("value", inputTemperatureMaxValue);
 
-    const rangeInput: HTMLInputElement = waterLevelComponent.querySelector('input[type="range"]');
+inputTemperatureInputComponent.addEventListener("input", e => {
+  const newValue = (<HTMLInputElement>e.target).value;
 
-    rangeInput.value = `${waterLevel}`;
+  inputTemperatureComponent.querySelector("span").innerHTML = `${newValue}°C`;
+});
 
-    rangeInput.max = `${maxWaterLevel}`;
+inputTemperatureComponent.querySelector(
+  "span"
+).innerHTML = `${inputTemperatureMaxValue}°C`;
 
-    // Update progress bar
-    boilerProgress.value = waterLevel;
-    boilerProgress.max = maxWaterLevel;
+const waterTemperatureComponent = document.querySelector(".waterTemperature");
 
-    if (boiler.waterTermValue.high !== 1) {
-        rangeInput.setAttribute('disabled', 'disabled');
-        inputTemperatureRange.setAttribute('disabled', 'disabled');
-    } else {
-        rangeInput.removeAttribute('disabled');
-        inputTemperatureRange.removeAttribute('disabled');
-    }
+waterTemperatureComponent.querySelector(
+  "strong"
+).innerHTML = `${inputTemperatureMaxValue}°C`;
 
-    if (maxWaterLevel !== waterLevel) {
-        pomp.checkWaterLevel(boiler.waterTermValue);
-        heating.calculateTemperature(+inputTemperatureRange.value, waterLevel)
-    }
+waterTemperatureComponent
+  .querySelector("strong")
+  .setAttribute("data-value", inputTemperatureMaxValue);
 
-}
+const heatingStatusComponent = document.querySelector(".heatingStatus");
 
-function updatePompStatus(pompStatus: PompStatus) {
-    (<HTMLElement>pompStatusComponent.querySelector(`strong:not(.${pompStatus})`)).style.display = 'none';
+// Init logic
+timerTick(+waterLevelMaxValue);
 
-    (<HTMLElement>pompStatusComponent.querySelector(`strong.${pompStatus}`)).style.display = 'block';
-}
+function timerTick(value: number) {
+  // WaterLevel
+  const waterLevelTermValue = waterLevelTerm.getTermValue(+value);
 
-function updateHeatingStatus(heatingStatus?: HeatingStatus) {
-    const actualHeatingStatus = heatingStatus || heating.status;
+  waterLevelComponent.querySelector("span").innerHTML = `${value}l`;
 
-    heatingStatusComponent.querySelectorAll(`strong:not(.${actualHeatingStatus})`).forEach((elem: HTMLElement) => {
-        elem.style.display = 'none'
-    });
+  waterLevelComponent.querySelector("input").value = `${value}`;
 
-    (<HTMLElement>heatingStatusComponent.querySelector(`strong.${actualHeatingStatus}`)).style.display = 'block';
-}
+  const waterLevelFinalTerm = BaseTerm.inferencingAndConcatTerms<
+    PumpPowerTerm,
+    PumpPower
+  >("waterLevel", waterLevelTermValue, pumpPowerTerm);
 
-function updateInputTemperatureLabel(temperature: number) {
-    inputTemperatureComponent.querySelector('span').innerText = `${temperature <= 9? 0:''}${temperature}°C`;
-}
+  const pumpStatusComponent = document.querySelector(".pumpStatus");
 
-function updateTemperatureLabel(temperature: number) {
-    waterTemperatureComponent.querySelector('span').innerText = `${temperature <= 9? 0:''}${temperature.toFixed(1)}°C`;
+  const pumpStatusValue = waterLevelFinalTerm.fuzzification().toFixed(0);
+
+  const howMuchWater =
+    pumpStatusValue === "20" ? 0 : ((+pumpStatusValue + 1) * 0.5).toFixed(0);
+
+  pumpStatusComponent.querySelector(
+    "strong"
+  ).innerHTML = `${pumpStatusValue} (${howMuchWater}l / ${(
+    ((window as any).delay || 500) / 1000
+  ).toFixed(1)} s)`;
+
+  // WaterTemperature
+  const inputWaterTemperature = +inputTemperatureInputComponent.value;
+  let currentWaterTemperature = +waterTemperatureComponent
+    .querySelector("strong")
+    .getAttribute("data-value");
+
+  const waterTemperatureTermValue = waterTemperatureTerm.getTermValue(
+    +currentWaterTemperature.toFixed(0)
+  );
+
+  const waterTemperatureFinalTerm = BaseTerm.inferencingAndConcatTerms<
+    HeatingLevelTerm,
+    HeatingLevel
+  >("waterTemperature", waterTemperatureTermValue, heatingLevelTerm);
+
+  const heatingStatusValue = waterTemperatureFinalTerm
+    .fuzzification()
+    .toFixed(0);
+
+  console.log(`HeartingLevel = ${heatingStatusValue}`);
+
+  heatingStatusComponent.querySelector("strong").innerHTML = heatingStatusValue;
+
+  const heatingPower =
+    heatingStatusValue === "10" ? 0 : +(+heatingStatusValue * 0.5).toFixed(0);
+
+  currentWaterTemperature += heatingPower;
+
+  const newWaterTemperature =
+    (+howMuchWater * inputWaterTemperature + value * currentWaterTemperature) /
+    (value + +howMuchWater);
+
+  console.log(
+    `(howMuchWater<${howMuchWater}> * inputWaterTemperature<${inputWaterTemperature}> + value<${value}> * currentWaterTemperature<${currentWaterTemperature}>)/(value<${value}>+howMuchWater<${howMuchWater}>)`,
+    newWaterTemperature
+  );
+
+  waterTemperatureComponent.querySelector(
+    "strong"
+  ).innerHTML = `${newWaterTemperature.toFixed(0)}°C`;
+
+  waterTemperatureComponent
+    .querySelector("strong")
+    .setAttribute("data-value", newWaterTemperature.toFixed(0));
+
+  heatingStatusComponent.querySelector(
+    "strong"
+  ).innerHTML = `${heatingStatusValue} (${
+    heatingStatusValue === "10" ? 0 : +(+heatingStatusValue * 0.5).toFixed(0)
+  }°C / ${(((window as any).delay || 500) / 1000).toFixed(1)} s)`;
+
+  if ((window as any).debug) {
+    waterTemperatureFinalTerm.displayDiagram("Water temperature", ["value"]);
+    waterLevelFinalTerm.displayDiagram("Water level", ["value"]);
+  }
+
+  // Both
+  const waterLevelInput = waterLevelComponent.querySelector("input");
+
+  if (pumpStatusValue !== "20" || heatingStatusValue !== "10") {
+    waterLevelInput.setAttribute("disabled", "disabled");
+    inputTemperatureInputComponent.setAttribute("disabled", "disabled");
+
+    setTimeout(() => {
+      const nextValue = +(value + +howMuchWater).toFixed(0);
+      timerTick(nextValue === 79 ? 80 : nextValue);
+    }, (window as any).delay || 500);
+  } else {
+    waterLevelInput.removeAttribute("disabled");
+    inputTemperatureInputComponent.removeAttribute("disabled");
+  }
+
+  progressComponent.value = value;
 }
