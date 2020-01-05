@@ -154,8 +154,8 @@ function timerTick(value: number) {
   }°C / ${(((window as any).delay || 500) / 1000).toFixed(1)} s)`;
 
   if ((window as any).debug) {
-    waterTemperatureFinalTerm.displayDiagram("Water temperature", ["value"]);
-    waterLevelFinalTerm.displayDiagram("Water level", ["value"]);
+    waterTemperatureFinalTerm.displayDiagram("Heating Status", ["value"]);
+    waterLevelFinalTerm.displayDiagram("Pump Status", ["value"]);
   }
 
   // Both
